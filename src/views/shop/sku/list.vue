@@ -163,6 +163,7 @@
 		methods: {
 			getListResult(e){
 				this.tableData = e.list
+				
 			},
 			// 打开模态框
 			openModel(e = false){

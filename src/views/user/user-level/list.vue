@@ -34,7 +34,7 @@
 			</template>
 		  </el-table-column>
 		  <el-table-column
-			prop="discont"
+			prop="discount"
 			align="center"
 			label="折扣率(%)">
 		  </el-table-column>
@@ -48,7 +48,12 @@
 			align="center"
 			label="状态">
 			<template slot-scope="scope">
-				<el-switch v-model="scope.row.status" :active-value="1" :inactive-value="0"></el-switch>
+				<el-button
+				:type="scope.row.status ? 'success' : 'danger'" 
+				size="mini"
+				@click="changeStatus(scope.row)"
+				plain>{{scope.row.status ? '启用' : '禁用'}}
+				</el-button>
 			</template>
 		  </el-table-column>
 		  <el-table-column
@@ -57,7 +62,7 @@
 			width="150">
 			<template slot-scope="scope">
 				<el-button type="text" size="mini" @click="openModel(scope)">修改</el-button>
-				<el-button type="text" size="mini" @click="deleteItem(scope)">删除</el-button>
+				<el-button type="text" size="mini" @click="deleteItem(scope.row)">删除</el-button>
 			</template>
 		  </el-table-column>
 		</el-table>
@@ -65,12 +70,14 @@
 		<el-footer class="border-top d-flex align-items-center px-0 position-fixed bg-white" style="bottom: 0;left: 200px;right: 0;z-index: 100;">
 		  <div style="flex: 1;" class="px-2">
 			  <el-pagination
-			  :current-page="currentPage"
-			  :page-sizes="[100, 200, 300, 400]"
-			  :page-size="100"
-			  layout="total, sizes, prev, pager, next, jumper"
-			  :total="400">
-			</el-pagination>
+			    :current-page="page.current"
+			    :page-sizes="page.sizes"
+			    :page-size="page.size"
+			    layout="total, sizes, prev, pager, next, jumper"
+			    :total="page.total"
+			    @size-change="handleSizeChange"
+			    @current-change="handleCurrentChange">
+			  </el-pagination>
 		  </div>
 		</el-footer>
 <!-- 新增/修改模态框 -->
@@ -98,7 +105,7 @@
 		<el-form-item label="升级条件">
 			<div>
 				<small class="mr-2">累计消费满</small>
-				<el-input type="number" v-model="form.consume" placeholder="累计消费" size="mini" style="width: 25%;">
+				<el-input type="number" v-model="form.max_price" placeholder="累计消费" size="mini" style="width: 25%;">
 					<template slot="append">元</template>
 				</el-input>
 				<small class="text-secondary d-block">
@@ -107,7 +114,7 @@
 			</div>
 			<div>
 				<small class="mr-2">累计次数满</small>
-				<el-input type="number" v-model="form.times" placeholder="累计次数" size="mini" style="width: 25%;">
+				<el-input type="number" v-model="form.max_times" placeholder="累计次数" size="mini" style="width: 25%;">
 					<template slot="append">次</template>
 				</el-input>
 				<small class="text-secondary d-block">
@@ -116,7 +123,7 @@
 			</div>
 		</el-form-item>
 		<el-form-item label="折扣率(%)">
-			<el-input size='mini' type="number" v-model="form.discont" placeholder="折扣率" style="width: 25%;">
+			<el-input size='mini' type="number" v-model="form.discount" placeholder="折扣率" style="width: 25%;">
 				<template slot="append">%</template>
 			</el-input>
 			<small class="text-secondary d-block">
@@ -140,24 +147,27 @@
 
 <script>
 	import buttonSearch from "@/components/common/button-search.vue"
+	import common from '@/common/mixins/common.js';
 	export default {
-		inject:['app'],
+		inject:['app','layout'],
+		mixins:[common],
 		components: {
 			buttonSearch
 		},
 		data() {
 			return {
+				preUrl:'user_level',
 				level:0,
-				tableData: [{
-					name:"普通会员",
-					consume:100,
-					times:10,
-					discont:10,
-					level:1,
-					status:1,//启用
-					create_time:"",
-				}],
-				currentPage:1,
+				tableData:[],
+				// tableData: [{
+				// 	name:"普通会员",
+				// 	consume:100,
+				// 	times:10,
+				// 	discount:10,
+				// 	level:1,
+				// 	status:1,//启用
+				// 	create_time:"",
+				// }],
 				createModel:false,
 				editIndex:-1,
 				search:{
@@ -168,9 +178,9 @@
 				
 				form:{
 					name:"",
-					consume:0,
-					times:0,
-					discont:0,
+					max_price:0,
+					max_times:0,
+					discount:0,
 					level:0,
 					status:1,//启用
 				},
@@ -183,15 +193,19 @@
 			getLevel() {
 				let arr = [{
 					name:"累计消费",
-					value:"consume"
+					value:"max_price"
 				},{
 					name:"累计次数",
-					value:"times"
+					value:"max_times"
 				}]
 				return arr[this.level]
 			}
 		},
 		methods: {
+			getListResult(e){
+				//console.log(e.list)
+				this.tableData = e.list
+			},
 			// 打开模态框
 			openModel(e = false){
 				// 增加
@@ -199,9 +213,9 @@
 					// 初始化表单
 					this.form = {
 						name:"",
-						consume:0,
-						times:0,
-						discont:0,
+						max_price:0,
+						max_times:0,
+						discount:0,
 						level:0,
 						status:1,//启用
 					}
@@ -210,9 +224,9 @@
 					// 修改
 					this.form = {
 						name:e.row.name,
-						consume:e.row.consume,
-						times:e.row.times,
-						discont:e.row.discont,
+						max_price:e.row.max_price,
+						max_times:e.row.max_times,
+						discount:e.row.discount,
 						level:e.row.level,
 						status:e.row.status,//启用
 					}
@@ -223,49 +237,13 @@
 			},
 			// 添加规格
 			submit(){
-				var msg = "添加"
-				if (this.editIndex === -1) {
-					this.tableData.unshift(this.form)
-				} else {
-					let item = this.tableData[this.editIndex]
-				
-					item.name = this.form.name
-					item.consume = this.form.consume
-					item.times = this.form.times
-					item.discont = this.form.discont
-					item.level = this.form.level
-					item.status = this.form.status
-					msg = "修改"
-				}
+				let id = 0
+				if (this.editIndex !== -1) {
+					id = this.tableData[this.editIndex].id
+				} 
+				this.addOrEdit(this.form,id)
 				// 关闭模态框
 				this.createModel = false
-				this.$message({
-					message: msg + '成功',
-					type: 'success'
-				});
-			},
-			// 修改状态
-			changeStatus(item){
-				// 请求服务端修改状态
-				item.status = !item.status
-				this.$message({
-					message: item.status ? '启用' : '禁用',
-					type: 'success'
-				});
-			},
-			// 删除单个
-			deleteItem(scope){
-				this.$confirm('是否要删除该等级?', '提示', {
-					confirmButtonText: '删除',
-					cancelButtonText: '取消',
-					type: 'warning'
-				}).then(() => {
-					this.tableData.splice(scope.$index,1)
-					this.$message({
-						message: '删除成功',
-						type: 'success'
-					});
-				})
 			},
 			// 清空筛选条件
 			clearSearch(){
